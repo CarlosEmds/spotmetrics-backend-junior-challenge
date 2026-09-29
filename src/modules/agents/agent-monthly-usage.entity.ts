@@ -1,0 +1,21 @@
+import { Column, Entity, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
+
+@Entity({ name: 'agent_monthly_usage' })
+@Unique('uq_agent_monthly_usage_agent_month', ['agentId', 'month'])
+export class AgentMonthlyUsage {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ name: 'agent_id', type: 'uuid' })
+  agentId: string;
+
+  /** Formato YYYY-MM */
+  @Column({ type: 'char', length: 7 })
+  month: string;
+
+  @Column({ name: 'tokens_used', type: 'integer', default: 0 })
+  tokensUsed: number;
+
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  updatedAt: Date;
+}

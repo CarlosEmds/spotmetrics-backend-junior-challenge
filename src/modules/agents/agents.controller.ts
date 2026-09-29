@@ -1,0 +1,35 @@
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { AgentsService } from './agents.service';
+import { CreateAgentDto } from './dto/create-agent.dto';
+
+@ApiTags('agents')
+@Controller('agents')
+export class AgentsController {
+  constructor(private readonly agentsService: AgentsService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Cria um agente' })
+  create(@Body() dto: CreateAgentDto) {
+    return this.agentsService.create(dto);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Lista agentes' })
+  findAll() {
+    return this.agentsService.findAll();
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Busca agente por id' })
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.agentsService.findOne(id);
+  }
+
+  @Get(':id/usage')
+  @ApiOperation({ summary: 'Consumo de tokens do agente no mês' })
+  @ApiQuery({ name: 'month', required: false, example: '2026-09' })
+  usage(@Param('id', ParseUUIDPipe) id: string, @Query('month') month?: string) {
+    return this.agentsService.getUsage(id, month);
+  }
+}
