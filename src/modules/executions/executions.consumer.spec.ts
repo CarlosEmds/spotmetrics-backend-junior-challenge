@@ -42,3 +42,22 @@ describe('ExecutionsConsumer.process', () => {
     expect(executions.save).not.toHaveBeenCalled();
   });
 });
+
+describe('ExecutionsConsumer.onModuleInit', () => {
+  const originalPrefetch = process.env.RABBITMQ_PREFETCH;
+
+  afterEach(() => {
+    if (originalPrefetch === undefined) delete process.env.RABBITMQ_PREFETCH;
+    else process.env.RABBITMQ_PREFETCH = originalPrefetch;
+  });
+
+  it('keeps the default prefetch when RABBITMQ_PREFETCH is empty', async () => {
+    process.env.RABBITMQ_PREFETCH = '';
+    const channel = { assertQueue: jest.fn(), prefetch: jest.fn(), consume: jest.fn() };
+    const consumer = new ExecutionsConsumer({} as any, {} as any, {} as any, { getChannel: () => channel } as any);
+
+    await consumer.onModuleInit();
+
+    expect(channel.prefetch).toHaveBeenCalledWith(5);
+  });
+});

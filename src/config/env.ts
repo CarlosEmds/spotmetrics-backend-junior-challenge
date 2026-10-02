@@ -1,5 +1,10 @@
 import 'dotenv/config';
 
+function str(name: string, fallback: string): string {
+  const raw = process.env[name];
+  return raw === undefined || raw === '' ? fallback : raw;
+}
+
 function int(name: string, fallback: number): number {
   const raw = process.env[name];
   if (raw === undefined || raw === '') return fallback;
@@ -13,17 +18,17 @@ export const env = {
   },
   get database() {
     return {
-      host: process.env.DATABASE_HOST ?? 'localhost',
+      host: str('DATABASE_HOST', 'localhost'),
       port: int('DATABASE_PORT', 5432),
-      username: process.env.DATABASE_USER ?? 'postgres',
-      password: process.env.DATABASE_PASSWORD ?? 'postgres',
-      database: process.env.DATABASE_NAME ?? 'ai_agents',
+      username: str('DATABASE_USER', 'postgres'),
+      password: str('DATABASE_PASSWORD', 'postgres'),
+      database: str('DATABASE_NAME', 'ai_agents'),
     };
   },
   get rabbitmq() {
     return {
-      url: process.env.RABBITMQ_URL ?? 'amqp://guest:guest@localhost:5672',
-      executionsQueue: process.env.RABBITMQ_EXECUTIONS_QUEUE ?? 'agent-executions',
+      url: str('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672'),
+      executionsQueue: str('RABBITMQ_EXECUTIONS_QUEUE', 'agent-executions'),
       prefetch: int('RABBITMQ_PREFETCH', 5),
     };
   },

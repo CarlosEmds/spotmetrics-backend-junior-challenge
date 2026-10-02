@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import 'reflect-metadata';
 import { AppModule } from './app.module';
+import { env } from './config/env';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
@@ -16,7 +17,7 @@ async function bootstrap(): Promise<void> {
     .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
 
-  const port = Number(process.env.PORT ?? 3000);
+  const port = env.port;
   await app.listen(port);
   Logger.log(`API listening on http://localhost:${port} (docs em /docs)`, 'Bootstrap');
 }

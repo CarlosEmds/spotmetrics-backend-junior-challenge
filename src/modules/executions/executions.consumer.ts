@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { Agent } from '../agents/agent.entity';
 import { currentMonth } from '../agents/agents.service';
 import { RabbitMQService } from '../../common/rabbitmq/rabbitmq.service';
+import { env } from '../../config/env';
 import { AgentExecution } from './agent-execution.entity';
 import { ExecutionStatus } from './execution-status.enum';
 import { ExecutionMessage, ExecutionsService } from './executions.service';
@@ -15,9 +16,9 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 @Injectable()
 export class ExecutionsConsumer implements OnModuleInit {
   private readonly logger = new Logger(ExecutionsConsumer.name);
-  private readonly queue = process.env.RABBITMQ_EXECUTIONS_QUEUE ?? 'agent-executions';
-  private readonly delayMs = Number(process.env.PROCESSING_DELAY_MS ?? 2000);
-  private readonly prefetch = Number(process.env.RABBITMQ_PREFETCH ?? 5);
+  private readonly queue = env.rabbitmq.executionsQueue;
+  private readonly delayMs = env.processingDelayMs;
+  private readonly prefetch = env.rabbitmq.prefetch;
 
   constructor(
     @InjectRepository(Agent) private readonly agents: Repository<Agent>,

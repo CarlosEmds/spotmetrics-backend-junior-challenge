@@ -11,6 +11,7 @@ import { Agent } from '../agents/agent.entity';
 import { AgentMonthlyUsage } from '../agents/agent-monthly-usage.entity';
 import { currentMonth } from '../agents/agents.service';
 import { RabbitMQService } from '../../common/rabbitmq/rabbitmq.service';
+import { env } from '../../config/env';
 import { AgentExecution } from './agent-execution.entity';
 import { CreateExecutionDto } from './dto/create-execution.dto';
 import { ExecutionStatus } from './execution-status.enum';
@@ -23,7 +24,7 @@ export interface ExecutionMessage {
 @Injectable()
 export class ExecutionsService {
   private readonly logger = new Logger(ExecutionsService.name);
-  private readonly queue = process.env.RABBITMQ_EXECUTIONS_QUEUE ?? 'agent-executions';
+  private readonly queue = env.rabbitmq.executionsQueue;
 
   constructor(
     @InjectRepository(Agent) private readonly agents: Repository<Agent>,
