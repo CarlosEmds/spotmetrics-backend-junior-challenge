@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ExecutionsService } from './executions.service';
 import { ExecutionStatus } from './execution-status.enum';
 
@@ -40,6 +40,13 @@ describe('ExecutionsService.create', () => {
   it('throws 404 when agent does not exist', async () => {
     const { service } = build({ agent: null });
     await expect(service.create('x', { input: 'hi' })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('throws 409 when the agent is inactive, without saving or publishing', async () => {
+    const { service, executions, rabbit } = build({ agent: { ...agent, active: false } });
+    await expect(service.create('a1', { input: 'hi' })).rejects.toBeInstanceOf(ConflictException);
+    expect(executions.save).not.toHaveBeenCalled();
+    expect(rabbit.publish).not.toHaveBeenCalled();
   });
 
   it('returns 429 when the monthly limit would be exceeded', async () => {
