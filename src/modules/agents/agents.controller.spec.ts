@@ -9,6 +9,7 @@ const AGENT_ID = '3b4f8f6e-1c2d-4a5b-9e8f-000000000001';
 const service = {
   getUsage: jest.fn().mockResolvedValue({ tokensUsed: 0 }),
   update: jest.fn(async (id: string, dto: object) => ({ id, ...dto })),
+  remove: jest.fn().mockResolvedValue(undefined),
 };
 let app: INestApplication;
 let baseUrl: string;
@@ -79,5 +80,22 @@ describe('AgentsController.update', () => {
 
     expect(res.status).toBe(400);
     expect(service.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('AgentsController.remove', () => {
+  it('returns 204 with an empty body', async () => {
+    const res = await fetch(`${baseUrl}/agents/${AGENT_ID}`, { method: 'DELETE' });
+
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe('');
+    expect(service.remove).toHaveBeenCalledWith(AGENT_ID);
+  });
+
+  it('returns 400 for an id that is not a UUID', async () => {
+    const res = await fetch(`${baseUrl}/agents/abc`, { method: 'DELETE' });
+
+    expect(res.status).toBe(400);
+    expect(service.remove).not.toHaveBeenCalled();
   });
 });

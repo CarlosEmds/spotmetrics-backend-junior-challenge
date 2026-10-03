@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AgentsService } from './agents.service';
 import { CreateAgentDto } from './dto/create-agent.dto';
@@ -32,6 +44,13 @@ export class AgentsController {
   @ApiOperation({ summary: 'Atualiza um agente (só os campos enviados)' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAgentDto) {
     return this.agentsService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Desativa um agente (soft delete); o histórico é mantido' })
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.agentsService.remove(id);
   }
 
   @Get(':id/usage')

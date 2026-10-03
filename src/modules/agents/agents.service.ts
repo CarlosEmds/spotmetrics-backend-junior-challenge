@@ -37,6 +37,17 @@ export class AgentsService {
     return this.agents.save(agent);
   }
 
+  /**
+   * Soft delete: desativa o agente em vez de apagar a linha. Execuções e consumo continuam
+   * no banco (são histórico de cobrança e as FKs não têm ON DELETE). Desfaz com PATCH { active: true }.
+   */
+  async remove(id: string): Promise<void> {
+    const agent = await this.findOne(id);
+    if (!agent.active) return;
+    agent.active = false;
+    await this.agents.save(agent);
+  }
+
   async getUsage(id: string, month: string = currentMonth()) {
     const agent = await this.findOne(id);
     const row = await this.usage.findOne({ where: { agentId: id, month } });

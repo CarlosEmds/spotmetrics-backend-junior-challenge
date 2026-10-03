@@ -8,6 +8,7 @@ function build(found: object | null = agent) {
     findOne: jest.fn().mockResolvedValue(found ? { ...found } : null),
     merge: jest.fn((target, source) => Object.assign(target, source)),
     save: jest.fn(async (x) => x),
+    delete: jest.fn(),
   };
   const service = new AgentsService(agents as any, {} as any);
   return { service, agents };
@@ -25,5 +26,25 @@ describe('AgentsService.update', () => {
     const { service, agents } = build(null);
     await expect(service.update('x', { name: 'Novo' })).rejects.toBeInstanceOf(NotFoundException);
     expect(agents.save).not.toHaveBeenCalled();
+  });
+});
+
+describe('AgentsService.remove', () => {
+  it('deactivates the agent instead of deleting the row', async () => {
+    const { service, agents } = build();
+    await service.remove('a1');
+    expect(agents.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1', active: false }));
+    expect(agents.delete).not.toHaveBeenCalled();
+  });
+
+  it('does nothing for an agent that is already inactive, so it can be called again', async () => {
+    const { service, agents } = build({ ...agent, active: false });
+    await expect(service.remove('a1')).resolves.toBeUndefined();
+    expect(agents.save).not.toHaveBeenCalled();
+  });
+
+  it('throws 404 when the agent does not exist', async () => {
+    const { service } = build(null);
+    await expect(service.remove('x')).rejects.toBeInstanceOf(NotFoundException);
   });
 });
