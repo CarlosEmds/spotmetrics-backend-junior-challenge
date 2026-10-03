@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { Agent } from '../agents/agent.entity';
 import { AgentMonthlyUsage } from '../agents/agent-monthly-usage.entity';
 import { currentMonth } from '../agents/agents.service';
@@ -86,9 +86,10 @@ export class ExecutionsService {
   /**
    * Soma feita pelo próprio Postgres numa única instrução: execuções concorrentes não se sobrescrevem
    * (antes era ler, somar na memória e salvar). O ON CONFLICT usa a unique (agent_id, month).
+   * Recebe o EntityManager da transação quando precisa rodar junto com outras escritas.
    */
-  async addTokensUsed(agentId: string, month: string, tokens: number): Promise<void> {
-    await this.usage.query(
+  async addTokensUsed(agentId: string, month: string, tokens: number, manager?: EntityManager): Promise<void> {
+    await (manager ?? this.usage).query(
       `INSERT INTO agent_monthly_usage (agent_id, month, tokens_used)
        VALUES ($1, $2, $3)
        ON CONFLICT (agent_id, month)

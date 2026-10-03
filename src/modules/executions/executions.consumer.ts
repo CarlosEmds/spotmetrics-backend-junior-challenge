@@ -63,6 +63,12 @@ export class ExecutionsConsumer implements OnModuleInit {
       this.logger.warn(`Execution ${executionId} not found, skipping`);
       return;
     }
+    // A entrega é at-least-once: a mesma mensagem pode voltar depois que a execução terminou.
+    // PROCESSING é reprocessada, porque o RabbitMQ só reentrega quando a tentativa anterior morreu.
+    if (execution.status === ExecutionStatus.COMPLETED || execution.status === ExecutionStatus.FAILED) {
+      this.logger.warn(`Execution ${execution.id} is already ${execution.status}, skipping`);
+      return;
+    }
 
     execution.status = ExecutionStatus.PROCESSING;
     execution.startedAt = new Date();
@@ -86,9 +92,11 @@ export class ExecutionsConsumer implements OnModuleInit {
     execution.totalTokens = execution.inputTokens + execution.outputTokens;
     execution.status = ExecutionStatus.COMPLETED;
     execution.completedAt = new Date();
-    await this.executions.save(execution);
-
-    await this.executionsService.addTokensUsed(agent.id, currentMonth(), execution.totalTokens);
+    // Concluir e cobrar juntos: ou as duas escritas acontecem, ou nenhuma.
+    await this.executions.manager.transaction(async (manager) => {
+      await manager.save(execution);
+      await this.executionsService.addTokensUsed(agent.id, currentMonth(), execution.totalTokens, manager);
+    });
     this.logger.log(`Execution ${execution.id} completed (${execution.totalTokens} tokens)`);
   }
 }
