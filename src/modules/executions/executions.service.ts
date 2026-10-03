@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, FindOptionsWhere, Repository } from 'typeorm';
 import { Agent } from '../agents/agent.entity';
 import { AgentMonthlyUsage } from '../agents/agent-monthly-usage.entity';
 import { currentMonth } from '../agents/agents.service';
@@ -15,6 +15,7 @@ import { RabbitMQService } from '../../common/rabbitmq/rabbitmq.service';
 import { env } from '../../config/env';
 import { AgentExecution } from './agent-execution.entity';
 import { CreateExecutionDto } from './dto/create-execution.dto';
+import { ListExecutionsQueryDto } from './dto/list-executions-query.dto';
 import { ExecutionStatus } from './execution-status.enum';
 import { countTokens, exceedsMonthlyLimit } from './tokens';
 
@@ -35,8 +36,7 @@ export class ExecutionsService {
   ) {}
 
   async create(agentId: string, dto: CreateExecutionDto): Promise<AgentExecution> {
-    const agent = await this.agents.findOne({ where: { id: agentId } });
-    if (!agent) throw new NotFoundException(`Agent ${agentId} not found`);
+    const agent = await this.findAgent(agentId);
     if (!agent.active) throw new ConflictException(`Agent ${agentId} is inactive`);
 
     const inputTokens = countTokens(dto.input);
@@ -72,10 +72,35 @@ export class ExecutionsService {
     return execution;
   }
 
+  async listByAgent(agentId: string, query: ListExecutionsQueryDto) {
+    await this.findAgent(agentId);
+
+    const where: FindOptionsWhere<AgentExecution> = { agentId };
+    if (query.status) where.status = query.status;
+
+    const [data, total] = await this.executions.findAndCount({
+      where,
+      // O id desempata execuções criadas no mesmo instante, para a paginação não repetir nem pular itens.
+      order: { createdAt: query.order, id: query.order },
+      skip: (query.page - 1) * query.limit,
+      take: query.limit,
+    });
+    return {
+      data,
+      meta: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) },
+    };
+  }
+
   async findOne(id: string): Promise<AgentExecution> {
     const execution = await this.executions.findOne({ where: { id } });
     if (!execution) throw new NotFoundException(`Execution ${id} not found`);
     return execution;
+  }
+
+  private async findAgent(agentId: string): Promise<Agent> {
+    const agent = await this.agents.findOne({ where: { id: agentId } });
+    if (!agent) throw new NotFoundException(`Agent ${agentId} not found`);
+    return agent;
   }
 
   async getTokensUsed(agentId: string, month: string): Promise<number> {

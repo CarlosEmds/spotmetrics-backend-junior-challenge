@@ -64,6 +64,36 @@ describe('ExecutionsService.create', () => {
   });
 });
 
+describe('ExecutionsService.listByAgent', () => {
+  const query = { page: 2, limit: 20, order: 'asc' as const };
+
+  it('paginates, filters by status and orders by creation date', async () => {
+    const { service, executions } = build();
+    executions.findAndCount.mockResolvedValue([[{ id: 'e21' }], 41]);
+    const result = await service.listByAgent('a1', { ...query, status: ExecutionStatus.FAILED });
+    expect(executions.findAndCount).toHaveBeenCalledWith({
+      where: { agentId: 'a1', status: ExecutionStatus.FAILED },
+      order: { createdAt: 'asc', id: 'asc' },
+      skip: 20,
+      take: 20,
+    });
+    expect(result).toEqual({ data: [{ id: 'e21' }], meta: { page: 2, limit: 20, total: 41, totalPages: 3 } });
+  });
+
+  it('does not filter by status when it is not sent', async () => {
+    const { service, executions } = build();
+    executions.findAndCount.mockResolvedValue([[], 0]);
+    await service.listByAgent('a1', query);
+    expect(executions.findAndCount.mock.calls[0][0].where).toEqual({ agentId: 'a1' });
+  });
+
+  it('throws 404 when the agent does not exist', async () => {
+    const { service, executions } = build({ agent: null });
+    await expect(service.listByAgent('x', query)).rejects.toBeInstanceOf(NotFoundException);
+    expect(executions.findAndCount).not.toHaveBeenCalled();
+  });
+});
+
 describe('ExecutionsService.addTokensUsed', () => {
   it('adds the tokens with a single atomic upsert in the database', async () => {
     const { service, usage } = build();
