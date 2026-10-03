@@ -14,7 +14,9 @@ import { currentMonth } from '../agents/agents.service';
 import { RabbitMQService } from '../../common/rabbitmq/rabbitmq.service';
 import { env } from '../../config/env';
 import { AgentExecution } from './agent-execution.entity';
+import { AgentMetricsDto } from './dto/agent-metrics.dto';
 import { CreateExecutionDto } from './dto/create-execution.dto';
+import { ExecutionPageDto } from './dto/execution-page.dto';
 import { ListExecutionsQueryDto } from './dto/list-executions-query.dto';
 import { ExecutionStatus } from './execution-status.enum';
 import { countTokens, exceedsMonthlyLimit } from './tokens';
@@ -72,7 +74,7 @@ export class ExecutionsService {
     return execution;
   }
 
-  async listByAgent(agentId: string, query: ListExecutionsQueryDto) {
+  async listByAgent(agentId: string, query: ListExecutionsQueryDto): Promise<ExecutionPageDto> {
     await this.findAgent(agentId);
 
     const where: FindOptionsWhere<AgentExecution> = { agentId };
@@ -91,7 +93,7 @@ export class ExecutionsService {
     };
   }
 
-  async getMetrics(agentId: string) {
+  async getMetrics(agentId: string): Promise<AgentMetricsDto> {
     await this.findAgent(agentId);
 
     // Os quatro números saem de uma query só, então refletem o mesmo instante do banco.

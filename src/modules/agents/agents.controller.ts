@@ -11,7 +11,15 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiNoContentResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Agent } from './agent.entity';
 import { AgentsService } from './agents.service';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
@@ -42,6 +50,11 @@ export class AgentsController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Atualiza um agente (só os campos enviados)' })
+  @ApiOkResponse({ type: Agent, description: 'Agente atualizado' })
+  @ApiBadRequestResponse({
+    description: 'Body inválido (ex.: limite menor que 1, nome em branco, null, campo desconhecido) ou id que não é UUID',
+  })
+  @ApiNotFoundResponse({ description: 'Agente não encontrado' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAgentDto) {
     return this.agentsService.update(id, dto);
   }
@@ -49,6 +62,9 @@ export class AgentsController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Desativa um agente (soft delete); o histórico é mantido' })
+  @ApiNoContentResponse({ description: 'Agente desativado, sem corpo. Repetir também responde 204 (idempotente)' })
+  @ApiBadRequestResponse({ description: 'Id que não é UUID' })
+  @ApiNotFoundResponse({ description: 'Agente não encontrado' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.agentsService.remove(id);
   }
