@@ -11,6 +11,7 @@ function build(overrides: { usage?: number; agent?: object | null; publishFails?
     save: jest.fn(async (x) => ({ id: 'e1', ...x })),
     findOne: jest.fn(),
     findAndCount: jest.fn(),
+    query: jest.fn(),
   };
   const usage = {
     findOne: jest.fn().mockResolvedValue(overrides.usage === undefined ? null : { tokensUsed: overrides.usage }),
@@ -91,6 +92,43 @@ describe('ExecutionsService.listByAgent', () => {
     const { service, executions } = build({ agent: null });
     await expect(service.listByAgent('x', query)).rejects.toBeInstanceOf(NotFoundException);
     expect(executions.findAndCount).not.toHaveBeenCalled();
+  });
+});
+
+describe('ExecutionsService.getMetrics', () => {
+  it('converts the database counts and averages the tokens over the completed executions', async () => {
+    const { service, executions } = build();
+    executions.query.mockResolvedValue([{ total: '4', completed: '2', failed: '1', tokens: '46' }]);
+    const metrics = await service.getMetrics('a1');
+    expect(metrics).toEqual({
+      agentId: 'a1',
+      totalExecutions: 4,
+      completed: 2,
+      failed: 1,
+      totalTokens: 46,
+      averageTokensPerExecution: 23,
+    });
+    const [sql, params] = executions.query.mock.calls[0];
+    expect(sql).toContain('COUNT(*) FILTER (WHERE status = $2)');
+    expect(params).toEqual(['a1', ExecutionStatus.COMPLETED, ExecutionStatus.FAILED]);
+  });
+
+  it('returns an average of 0 when no execution completed, instead of dividing by zero', async () => {
+    const { service, executions } = build();
+    executions.query.mockResolvedValue([{ total: '1', completed: '0', failed: '1', tokens: '0' }]);
+    expect((await service.getMetrics('a1')).averageTokensPerExecution).toBe(0);
+  });
+
+  it('rounds the average to two decimals', async () => {
+    const { service, executions } = build();
+    executions.query.mockResolvedValue([{ total: '3', completed: '3', failed: '0', tokens: '50' }]);
+    expect((await service.getMetrics('a1')).averageTokensPerExecution).toBe(16.67);
+  });
+
+  it('throws 404 when the agent does not exist', async () => {
+    const { service, executions } = build({ agent: null });
+    await expect(service.getMetrics('x')).rejects.toBeInstanceOf(NotFoundException);
+    expect(executions.query).not.toHaveBeenCalled();
   });
 });
 

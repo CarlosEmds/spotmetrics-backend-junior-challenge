@@ -20,6 +20,12 @@ export class ExecutionsController {
     return this.executionsService.listByAgent(agentId, query);
   }
 
+  @Get('agents/:agentId/metrics')
+  @ApiOperation({ summary: 'Métricas do agente: execuções por status, tokens consumidos e média por execução concluída' })
+  getMetrics(@Param('agentId', ParseUUIDPipe) agentId: string) {
+    return this.executionsService.getMetrics(agentId);
+  }
+
   @Get('executions/:id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.executionsService.findOne(id);

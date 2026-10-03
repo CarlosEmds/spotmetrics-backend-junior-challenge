@@ -91,6 +91,33 @@ export class ExecutionsService {
     };
   }
 
+  async getMetrics(agentId: string) {
+    await this.findAgent(agentId);
+
+    // Os quatro números saem de uma query só, então refletem o mesmo instante do banco.
+    const [row]: { total: string; completed: string; failed: string; tokens: string }[] = await this.executions.query(
+      `SELECT COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE status = $2) AS completed,
+              COUNT(*) FILTER (WHERE status = $3) AS failed,
+              COALESCE(SUM(total_tokens) FILTER (WHERE status = $2), 0) AS tokens
+       FROM agent_executions
+       WHERE agent_id = $1`,
+      [agentId, ExecutionStatus.COMPLETED, ExecutionStatus.FAILED],
+    );
+    // O pg devolve COUNT e SUM (bigint) como string.
+    const completed = Number(row.completed);
+    const totalTokens = Number(row.tokens);
+    return {
+      agentId,
+      totalExecutions: Number(row.total),
+      completed,
+      failed: Number(row.failed),
+      totalTokens,
+      // Só execução concluída consome tokens, então a média é sobre as concluídas.
+      averageTokensPerExecution: completed ? Math.round((totalTokens / completed) * 100) / 100 : 0,
+    };
+  }
+
   async findOne(id: string): Promise<AgentExecution> {
     const execution = await this.executions.findOne({ where: { id } });
     if (!execution) throw new NotFoundException(`Execution ${id} not found`);
