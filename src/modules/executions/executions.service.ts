@@ -83,12 +83,17 @@ export class ExecutionsService {
     return row?.tokensUsed ?? 0;
   }
 
+  /**
+   * Soma feita pelo próprio Postgres numa única instrução: execuções concorrentes não se sobrescrevem
+   * (antes era ler, somar na memória e salvar). O ON CONFLICT usa a unique (agent_id, month).
+   */
   async addTokensUsed(agentId: string, month: string, tokens: number): Promise<void> {
-    let row = await this.usage.findOne({ where: { agentId, month } });
-    if (!row) {
-      row = this.usage.create({ agentId, month, tokensUsed: 0 });
-    }
-    row.tokensUsed += tokens;
-    await this.usage.save(row);
+    await this.usage.query(
+      `INSERT INTO agent_monthly_usage (agent_id, month, tokens_used)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (agent_id, month)
+       DO UPDATE SET tokens_used = agent_monthly_usage.tokens_used + EXCLUDED.tokens_used, updated_at = now()`,
+      [agentId, month, tokens],
+    );
   }
 }

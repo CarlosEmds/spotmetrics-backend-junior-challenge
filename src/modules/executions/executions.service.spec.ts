@@ -16,6 +16,7 @@ function build(overrides: { usage?: number; agent?: object | null; publishFails?
     findOne: jest.fn().mockResolvedValue(overrides.usage === undefined ? null : { tokensUsed: overrides.usage }),
     create: jest.fn((x) => x),
     save: jest.fn(async (x) => x),
+    query: jest.fn(),
   };
   const rabbit = {
     publish: overrides.publishFails
@@ -64,15 +65,20 @@ describe('ExecutionsService.create', () => {
 });
 
 describe('ExecutionsService.addTokensUsed', () => {
-  it('creates the monthly row on first use', async () => {
+  it('adds the tokens with a single atomic upsert in the database', async () => {
     const { service, usage } = build();
     await service.addTokensUsed('a1', '2026-09', 5);
-    expect(usage.save).toHaveBeenCalledWith(expect.objectContaining({ tokensUsed: 5 }));
+    expect(usage.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = usage.query.mock.calls[0];
+    expect(sql).toContain('ON CONFLICT (agent_id, month)');
+    expect(sql).toContain('tokens_used = agent_monthly_usage.tokens_used + EXCLUDED.tokens_used');
+    expect(params).toEqual(['a1', '2026-09', 5]);
   });
 
-  it('adds to the existing monthly total', async () => {
+  it('does not read the current total before writing it', async () => {
     const { service, usage } = build({ usage: 7 });
     await service.addTokensUsed('a1', '2026-09', 5);
-    expect(usage.save).toHaveBeenCalledWith(expect.objectContaining({ tokensUsed: 12 }));
+    expect(usage.findOne).not.toHaveBeenCalled();
+    expect(usage.save).not.toHaveBeenCalled();
   });
 });
