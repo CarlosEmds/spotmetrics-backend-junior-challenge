@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Agent } from './agent.entity';
 import { AgentMonthlyUsage } from './agent-monthly-usage.entity';
 import { CreateAgentDto } from './dto/create-agent.dto';
+import { UpdateAgentDto } from './dto/update-agent.dto';
 
 export function currentMonth(now: Date = new Date()): string {
   return now.toISOString().slice(0, 7);
@@ -28,6 +29,12 @@ export class AgentsService {
     const agent = await this.agents.findOne({ where: { id } });
     if (!agent) throw new NotFoundException(`Agent ${id} not found`);
     return agent;
+  }
+
+  async update(id: string, dto: UpdateAgentDto): Promise<Agent> {
+    const agent = await this.findOne(id);
+    this.agents.merge(agent, dto);
+    return this.agents.save(agent);
   }
 
   async getUsage(id: string, month: string = currentMonth()) {

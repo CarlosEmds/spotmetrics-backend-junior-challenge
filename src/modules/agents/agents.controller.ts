@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AgentsService } from './agents.service';
 import { CreateAgentDto } from './dto/create-agent.dto';
+import { UpdateAgentDto } from './dto/update-agent.dto';
 import { UsageQueryDto } from './dto/usage-query.dto';
 
 @ApiTags('agents')
@@ -25,6 +26,12 @@ export class AgentsController {
   @ApiOperation({ summary: 'Busca agente por id' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.agentsService.findOne(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Atualiza um agente (só os campos enviados)' })
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAgentDto) {
+    return this.agentsService.update(id, dto);
   }
 
   @Get(':id/usage')
