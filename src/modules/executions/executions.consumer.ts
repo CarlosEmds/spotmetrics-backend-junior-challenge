@@ -1,7 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConsumeMessage } from 'amqplib';
-import { Repository } from 'typeorm';
+import { isUUID } from 'class-validator';
+import { In, Repository } from 'typeorm';
 import { Agent } from '../agents/agent.entity';
 import { currentMonth } from '../agents/agents.service';
 import { RabbitMQService } from '../../common/rabbitmq/rabbitmq.service';
@@ -39,20 +40,49 @@ export class ExecutionsConsumer implements OnModuleInit {
     if (!msg) return;
     const channel = this.rabbit.getChannel();
 
-    let payload: ExecutionMessage;
-    try {
-      payload = JSON.parse(msg.content.toString()) as ExecutionMessage;
-    } catch {
-      this.logger.warn('Discarding malformed message');
+    const executionId = this.parseExecutionId(msg);
+    if (!executionId) {
+      this.logger.warn(`Discarding message without a valid executionId: ${msg.content.toString().slice(0, 200)}`);
       channel.nack(msg, false, false);
       return;
     }
 
     try {
-      await this.process(payload.executionId);
+      await this.process(executionId);
       channel.ack(msg);
     } catch (err) {
-      this.logger.error(`Error processing ${payload.executionId}, requeueing`, (err as Error).stack);
+      await this.handleFailure(msg, executionId, err as Error);
+    }
+  }
+
+  private parseExecutionId(msg: ConsumeMessage): string | null {
+    try {
+      const payload = JSON.parse(msg.content.toString()) as Partial<ExecutionMessage> | null;
+      const executionId = payload?.executionId;
+      return typeof executionId === 'string' && isUUID(executionId) ? executionId : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Uma nova tentativa; se a mensagem reentregue falhar de novo, a execução vira FAILED. */
+  private async handleFailure(msg: ConsumeMessage, executionId: string, err: Error): Promise<void> {
+    const channel = this.rabbit.getChannel();
+    if (!msg.fields.redelivered) {
+      this.logger.warn(`Error processing ${executionId}, retrying once: ${err.message}`);
+      channel.nack(msg, false, true);
+      return;
+    }
+    try {
+      await this.executions.update(
+        { id: executionId, status: In([ExecutionStatus.PENDING, ExecutionStatus.PROCESSING]) },
+        { status: ExecutionStatus.FAILED, error: `Processing failed twice: ${err.message}`, completedAt: new Date() },
+      );
+      this.logger.error(`Execution ${executionId} failed after a retry: ${err.message}`);
+      channel.ack(msg);
+    } catch {
+      // Nem o FAILED foi gravado (banco fora?): devolve para a fila para não perder a execução.
+      this.logger.error(`Could not mark execution ${executionId} as FAILED, requeueing`);
       channel.nack(msg, false, true);
     }
   }

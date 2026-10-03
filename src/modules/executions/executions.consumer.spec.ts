@@ -111,6 +111,73 @@ describe('ExecutionsConsumer.process', () => {
   });
 });
 
+describe('ExecutionsConsumer.handle', () => {
+  const EXECUTION_ID = 'b3d3c7b2-6a63-4a4b-9d3e-2f1c0e8a9f10';
+
+  function build(processResult: 'ok' | 'error', options: { redelivered?: boolean; updateFails?: boolean } = {}) {
+    const channel = { ack: jest.fn(), nack: jest.fn() };
+    const executions = {
+      update: options.updateFails ? jest.fn().mockRejectedValue(new Error('db down')) : jest.fn(),
+    };
+    const consumer = new ExecutionsConsumer({} as any, executions as any, {} as any, { getChannel: () => channel } as any);
+    const process = jest.spyOn(consumer, 'process');
+    if (processResult === 'ok') process.mockResolvedValue();
+    else process.mockRejectedValue(new Error('db down'));
+    const message = (content: string) => ({ content: Buffer.from(content), fields: { redelivered: !!options.redelivered } });
+    const handle = (content: string) => consumer['handle'](message(content) as any);
+    return { handle, channel, executions, process };
+  }
+
+  it.each(['{"executionId":"abc"}', '{}', 'not json'])('discards the message %p without processing it', async (content) => {
+    const { handle, channel, process } = build('ok');
+
+    await handle(content);
+
+    expect(process).not.toHaveBeenCalled();
+    expect(channel.nack).toHaveBeenCalledWith(expect.anything(), false, false);
+  });
+
+  it('acks a valid message after processing it', async () => {
+    const { handle, channel, process } = build('ok');
+
+    await handle(JSON.stringify({ executionId: EXECUTION_ID }));
+
+    expect(process).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(channel.ack).toHaveBeenCalled();
+  });
+
+  it('requeues the message once when processing fails for the first time', async () => {
+    const { handle, channel, executions } = build('error');
+
+    await handle(JSON.stringify({ executionId: EXECUTION_ID }));
+
+    expect(channel.nack).toHaveBeenCalledWith(expect.anything(), false, true);
+    expect(executions.update).not.toHaveBeenCalled();
+  });
+
+  it('marks the execution FAILED and acks when the redelivered message fails again', async () => {
+    const { handle, channel, executions } = build('error', { redelivered: true });
+
+    await handle(JSON.stringify({ executionId: EXECUTION_ID }));
+
+    expect(executions.update).toHaveBeenCalledWith(
+      expect.objectContaining({ id: EXECUTION_ID }),
+      expect.objectContaining({ status: ExecutionStatus.FAILED }),
+    );
+    expect(channel.ack).toHaveBeenCalled();
+    expect(channel.nack).not.toHaveBeenCalled();
+  });
+
+  it('requeues the message when not even FAILED can be saved', async () => {
+    const { handle, channel } = build('error', { redelivered: true, updateFails: true });
+
+    await handle(JSON.stringify({ executionId: EXECUTION_ID }));
+
+    expect(channel.nack).toHaveBeenCalledWith(expect.anything(), false, true);
+    expect(channel.ack).not.toHaveBeenCalled();
+  });
+});
+
 describe('ExecutionsConsumer.onModuleInit', () => {
   const originalPrefetch = process.env.RABBITMQ_PREFETCH;
 
