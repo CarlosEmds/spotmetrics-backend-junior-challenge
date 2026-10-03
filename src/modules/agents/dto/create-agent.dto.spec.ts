@@ -4,8 +4,8 @@ import { CreateAgentDto } from './create-agent.dto';
 
 const valid = { name: 'Support Assistant', systemPrompt: 'Você é um assistente cordial.', monthlyTokenLimit: 10000 };
 
-async function invalidFields(body: object): Promise<string[]> {
-  const errors = await validate(plainToInstance(CreateAgentDto, body));
+async function invalidFields(data: object): Promise<string[]> {
+  const errors = await validate(plainToInstance(CreateAgentDto, data));
   return errors.map((error) => error.property);
 }
 

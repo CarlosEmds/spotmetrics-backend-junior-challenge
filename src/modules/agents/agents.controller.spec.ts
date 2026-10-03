@@ -1,11 +1,13 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { createValidationPipe } from '../../config/validation';
 import { AgentsController } from './agents.controller';
 import { AgentsService } from './agents.service';
 
 const AGENT_ID = '3b4f8f6e-1c2d-4a5b-9e8f-000000000001';
 
-describe('AgentsController (HTTP)', () => {
+// Testado via HTTP: sobe só o controller, com um service falso e o mesmo ValidationPipe do main.ts.
+describe('AgentsController.usage', () => {
   let app: INestApplication;
   let baseUrl: string;
   const service = { getUsage: jest.fn().mockResolvedValue({ tokensUsed: 0 }) };
@@ -16,8 +18,7 @@ describe('AgentsController (HTTP)', () => {
       providers: [{ provide: AgentsService, useValue: service }],
     }).compile();
     app = moduleRef.createNestApplication();
-    // Mesma configuração do main.ts
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(createValidationPipe());
     await app.listen(0, '127.0.0.1');
     baseUrl = await app.getUrl();
   });

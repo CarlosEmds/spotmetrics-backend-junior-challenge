@@ -2,8 +2,8 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { CreateExecutionDto } from './create-execution.dto';
 
-async function invalidFields(body: object): Promise<string[]> {
-  const errors = await validate(plainToInstance(CreateExecutionDto, body));
+async function invalidFields(data: object): Promise<string[]> {
+  const errors = await validate(plainToInstance(CreateExecutionDto, data));
   return errors.map((error) => error.property);
 }
 
