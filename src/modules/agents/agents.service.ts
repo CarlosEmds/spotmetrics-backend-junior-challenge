@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Agent } from './agent.entity';
 import { AgentMonthlyUsage } from './agent-monthly-usage.entity';
+import { AgentUsageDto } from './dto/agent-usage.dto';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
 
@@ -48,7 +49,7 @@ export class AgentsService {
     await this.agents.save(agent);
   }
 
-  async getUsage(id: string, month: string = currentMonth()) {
+  async getUsage(id: string, month: string = currentMonth()): Promise<AgentUsageDto> {
     const agent = await this.findOne(id);
     const row = await this.usage.findOne({ where: { agentId: id, month } });
     const tokensUsed = row?.tokensUsed ?? 0;

@@ -1,5 +1,16 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiServiceUnavailableResponse,
+  ApiTags,
+  ApiTooManyRequestsResponse,
+} from '@nestjs/swagger';
+import { AgentExecution } from './agent-execution.entity';
 import { AgentMetricsDto } from './dto/agent-metrics.dto';
 import { CreateExecutionDto } from './dto/create-execution.dto';
 import { ExecutionPageDto } from './dto/execution-page.dto';
@@ -12,6 +23,15 @@ export class ExecutionsController {
   constructor(private readonly executionsService: ExecutionsService) {}
 
   @Post('agents/:agentId/executions')
+  @ApiOperation({ summary: 'Enfileira uma execução; o worker processa depois (acompanhe em GET /executions/{id})' })
+  @ApiCreatedResponse({ type: AgentExecution, description: 'Execução gravada como PENDING e publicada na fila' })
+  @ApiBadRequestResponse({ description: 'input em branco, maior que 10.000 caracteres, campo desconhecido ou id que não é UUID' })
+  @ApiNotFoundResponse({ description: 'Agente não encontrado' })
+  @ApiConflictResponse({ description: 'Agente inativo' })
+  @ApiTooManyRequestsResponse({
+    description: 'Limite mensal de tokens atingido; o corpo traz monthlyTokenLimit e tokensUsed',
+  })
+  @ApiServiceUnavailableResponse({ description: 'Fila indisponível; a execução fica gravada como FAILED' })
   create(@Param('agentId', ParseUUIDPipe) agentId: string, @Body() dto: CreateExecutionDto) {
     return this.executionsService.create(agentId, dto);
   }
@@ -37,6 +57,10 @@ export class ExecutionsController {
   }
 
   @Get('executions/:id')
+  @ApiOperation({ summary: 'Busca uma execução por id: status, output, tokens e erro' })
+  @ApiOkResponse({ type: AgentExecution, description: 'Execução encontrada' })
+  @ApiBadRequestResponse({ description: 'Id que não é UUID' })
+  @ApiNotFoundResponse({ description: 'Execução não encontrada' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.executionsService.findOne(id);
   }
