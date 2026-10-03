@@ -16,7 +16,7 @@ import { env } from '../../config/env';
 import { AgentExecution } from './agent-execution.entity';
 import { CreateExecutionDto } from './dto/create-execution.dto';
 import { ExecutionStatus } from './execution-status.enum';
-import { countTokens } from './tokens';
+import { countTokens, exceedsMonthlyLimit } from './tokens';
 
 export interface ExecutionMessage {
   executionId: string;
@@ -41,7 +41,7 @@ export class ExecutionsService {
 
     const inputTokens = countTokens(dto.input);
     const used = await this.getTokensUsed(agentId, currentMonth());
-    if (used + inputTokens > agent.monthlyTokenLimit) {
+    if (exceedsMonthlyLimit(used, inputTokens, agent.monthlyTokenLimit)) {
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,

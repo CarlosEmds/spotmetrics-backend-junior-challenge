@@ -2,26 +2,28 @@ import { ExecutionsConsumer } from './executions.consumer';
 import { ExecutionStatus } from './execution-status.enum';
 
 describe('ExecutionsConsumer.process', () => {
+  const agent = { id: 'a1', name: 'Bot', active: true, monthlyTokenLimit: 100 };
+
   beforeEach(() => {
     process.env.PROCESSING_DELAY_MS = '0';
   });
 
-  function build(execution: object | null, agent: object | null) {
-    const agents = { findOne: jest.fn().mockResolvedValue(agent) };
+  function build(execution: object | null, agentFound: object | null, tokensUsed = 0) {
+    const agents = { findOne: jest.fn().mockResolvedValue(agentFound) };
     const tx = { save: jest.fn(async (x) => x) };
     const executions = {
       findOne: jest.fn().mockResolvedValue(execution),
       save: jest.fn(async (x) => x),
       manager: { transaction: jest.fn(async (work) => work(tx)) },
     };
-    const service = { addTokensUsed: jest.fn() };
+    const service = { addTokensUsed: jest.fn(), getTokensUsed: jest.fn().mockResolvedValue(tokensUsed) };
     const consumer = new ExecutionsConsumer(agents as any, executions as any, service as any, {} as any);
     return { consumer, executions, service, tx };
   }
 
   it('completes a pending execution and records token usage', async () => {
     const execution = { id: 'e1', agentId: 'a1', input: 'hello world', inputTokens: 2, status: ExecutionStatus.PENDING };
-    const { consumer, service, tx } = build(execution, { id: 'a1', name: 'Bot', active: true });
+    const { consumer, service, tx } = build(execution, agent);
 
     await consumer.process('e1');
 
@@ -31,7 +33,7 @@ describe('ExecutionsConsumer.process', () => {
 
   it('saves COMPLETED and adds the tokens in the same transaction', async () => {
     const execution = { id: 'e1', agentId: 'a1', input: 'hello world', inputTokens: 2, status: ExecutionStatus.PENDING };
-    const { consumer, executions, service, tx } = build(execution, { id: 'a1', name: 'Bot', active: true });
+    const { consumer, executions, service, tx } = build(execution, agent);
 
     await consumer.process('e1');
 
@@ -44,7 +46,7 @@ describe('ExecutionsConsumer.process', () => {
     'skips an execution that is already %s, without charging tokens again',
     async (status) => {
       const execution = { id: 'e1', agentId: 'a1', input: 'hello world', inputTokens: 2, status };
-      const { consumer, executions, service } = build(execution, { id: 'a1', name: 'Bot', active: true });
+      const { consumer, executions, service } = build(execution, agent);
 
       await consumer.process('e1');
 
@@ -57,12 +59,37 @@ describe('ExecutionsConsumer.process', () => {
 
   it('processes again an execution left in PROCESSING by a worker that died', async () => {
     const execution = { id: 'e1', agentId: 'a1', input: 'hello world', inputTokens: 2, status: ExecutionStatus.PROCESSING };
-    const { consumer, service } = build(execution, { id: 'a1', name: 'Bot', active: true });
+    const { consumer, service } = build(execution, agent);
 
     await consumer.process('e1');
 
     expect(execution.status).toBe(ExecutionStatus.COMPLETED);
     expect(service.addTokensUsed).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails an execution whose agent was deactivated while the message waited in the queue', async () => {
+    const execution = { id: 'e1', agentId: 'a1', input: 'hello world', inputTokens: 2, status: ExecutionStatus.PENDING };
+    const { consumer, executions, service } = build(execution, { ...agent, active: false });
+
+    await consumer.process('e1');
+
+    expect(execution).toMatchObject({ status: ExecutionStatus.FAILED, error: 'Agent a1 is inactive' });
+    expect(executions.manager.transaction).not.toHaveBeenCalled();
+    expect(service.addTokensUsed).not.toHaveBeenCalled();
+  });
+
+  it('fails an execution when the monthly limit was used up while the message waited in the queue', async () => {
+    const execution = { id: 'e1', agentId: 'a1', input: 'hello world', inputTokens: 2, status: ExecutionStatus.PENDING };
+    const { consumer, executions, service } = build(execution, { ...agent, monthlyTokenLimit: 10 }, 10);
+
+    await consumer.process('e1');
+
+    expect(execution).toMatchObject({
+      status: ExecutionStatus.FAILED,
+      error: 'Monthly token limit exceeded: used 10 of 10 tokens',
+    });
+    expect(executions.manager.transaction).not.toHaveBeenCalled();
+    expect(service.addTokensUsed).not.toHaveBeenCalled();
   });
 
   it('fails when the agent does not exist', async () => {

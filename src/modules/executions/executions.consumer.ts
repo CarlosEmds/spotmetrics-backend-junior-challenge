@@ -9,7 +9,7 @@ import { env } from '../../config/env';
 import { AgentExecution } from './agent-execution.entity';
 import { ExecutionStatus } from './execution-status.enum';
 import { ExecutionMessage, ExecutionsService } from './executions.service';
-import { countTokens, simulateAgentOutput } from './tokens';
+import { countTokens, exceedsMonthlyLimit, simulateAgentOutput } from './tokens';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -77,10 +77,18 @@ export class ExecutionsConsumer implements OnModuleInit {
 
     const agent = await this.agents.findOne({ where: { id: execution.agentId } });
     if (!agent) {
-      execution.status = ExecutionStatus.FAILED;
-      execution.error = `Agent ${execution.agentId} not found`;
-      execution.completedAt = new Date();
-      await this.executions.save(execution);
+      await this.fail(execution, `Agent ${execution.agentId} not found`);
+      return;
+    }
+    // A API já conferiu isso ao enfileirar, mas a mensagem pode ter esperado na fila enquanto o
+    // agente era desativado ou as execuções anteriores esgotavam o limite do mês.
+    if (!agent.active) {
+      await this.fail(execution, `Agent ${agent.id} is inactive`);
+      return;
+    }
+    const used = await this.executionsService.getTokensUsed(agent.id, currentMonth());
+    if (exceedsMonthlyLimit(used, execution.inputTokens, agent.monthlyTokenLimit)) {
+      await this.fail(execution, `Monthly token limit exceeded: used ${used} of ${agent.monthlyTokenLimit} tokens`);
       return;
     }
 
@@ -98,5 +106,13 @@ export class ExecutionsConsumer implements OnModuleInit {
       await this.executionsService.addTokensUsed(agent.id, currentMonth(), execution.totalTokens, manager);
     });
     this.logger.log(`Execution ${execution.id} completed (${execution.totalTokens} tokens)`);
+  }
+
+  private async fail(execution: AgentExecution, error: string): Promise<void> {
+    execution.status = ExecutionStatus.FAILED;
+    execution.error = error;
+    execution.completedAt = new Date();
+    await this.executions.save(execution);
+    this.logger.warn(`Execution ${execution.id} failed: ${error}`);
   }
 }
